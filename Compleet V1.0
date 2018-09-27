@@ -1,0 +1,169 @@
+/* UITLEG BIJ DEZE CODE
+ in deze code wordt at random een etage gekozen. Bij de "omhoog" button is dat een random etage boven de eigen etage.
+ Bij de "omlaag" button wordt er een random etage onder de eigen etage gekozen. Dit doe ik nu tijdelijk omdat we de liften
+ nog niet aan elkaar gekoppeld hebben en je dus geen verdieping kan kiezen. Door op deze manier te werk te gaan kan ik de 
+ lift in ieder geval testen op zijn werking.*/
+ 
+//------pin layout------
+int latchPin = 2; //7 segment shiftregister
+int dataPin =3; //7 segment shiftregister
+int clockPin = 4; //7 segment shiftregister
+int butOmlaag = 5; //button omlaag
+int butOmhoog = 6; //button omhoog
+int ledR = 10; //rode pin van RGB LED
+int ledG = 11; //groene pin van RGB LED
+int trigPin = 12; //afstandssensor
+int echoPin = 13; //afstandssensor
+//----------------------
+
+bool detectie;
+int liftTrigger = 5; //afstand vanaf waar de lift gedetecteerd wordt
+long tijd; //tijd die het duurt voor de ultrasone puls terug komt op de afstandssensor
+int afstand; //de afstand die de sensor meet
+int beginEtage = 0; //op deze etage begint de lift
+int mijnEtage = 3; //mijn etage
+int huidigeEtage; //op deze etage bevindt de lift zich
+int displayEtage[] = {64, 121, 36, 48, 25, 18}; //geeft het etagenummer weer op 7 segment
+int doelEtage; //de etage waar de persoon in de lift naartoe wil
+
+void setup() 
+{
+//--pin eigenschappen---
+pinMode(latchPin, OUTPUT);
+pinMode(dataPin, OUTPUT);
+pinMode(clockPin, OUTPUT);
+pinMode(butOmlaag, INPUT_PULLUP);
+pinMode(butOmhoog, INPUT_PULLUP);
+pinMode(ledR, OUTPUT);
+pinMode(ledG, OUTPUT);
+pinMode(trigPin, OUTPUT);
+pinMode(echoPin, INPUT);
+//----------------------
+
+huidigeEtage = beginEtage;
+digitalWrite(ledR, LOW);
+digitalWrite(ledG, LOW);
+digitalWrite(latchPin,LOW);
+shiftOut(dataPin, clockPin, MSBFIRST, displayEtage[huidigeEtage]); //laat huidige etage zien op display
+digitalWrite(latchPin, HIGH);
+Serial.begin(9600); //het opstarten van de seriële communicatie
+}
+
+void loop() 
+{
+
+int omlaag = digitalRead(butOmlaag); //lees de waarde van de omlaag button
+int omhoog = digitalRead(butOmhoog); //lees de waarde van de omhoog button
+
+if (omlaag != HIGH && detectie == false) {
+Serial.println("aanroepen omlaag");
+digitalWrite(ledR, HIGH);
+digitalWrite(ledG, LOW);
+doelEtage = random(-1,3); //kies een random etage onder eigen etage
+
+while (huidigeEtage>mijnEtage){ //ga elke 2 seconden 1 etage omlaag
+
+digitalWrite(latchPin,LOW);
+shiftOut(dataPin, clockPin, MSBFIRST, displayEtage[huidigeEtage]);
+digitalWrite(latchPin, HIGH);
+delay(2000);
+huidigeEtage--;
+}
+
+while (huidigeEtage<mijnEtage){ //ga elke 2 seconden 1 etage omhoog
+
+digitalWrite(latchPin,LOW);
+shiftOut(dataPin, clockPin, MSBFIRST, displayEtage[huidigeEtage]);
+digitalWrite(latchPin, HIGH);
+delay(2000);
+huidigeEtage++;
+}
+} 
+
+if (omhoog != HIGH && detectie == false) {
+Serial.println("aanroepen omhoog");
+digitalWrite(ledR, HIGH);
+digitalWrite(ledG, LOW);
+doelEtage = random(3, 6); //kies een random etage boven eigen etage
+
+while (huidigeEtage>mijnEtage){ //ga elke 2 seconden 1 etage omlaag
+
+digitalWrite(latchPin,LOW);
+shiftOut(dataPin, clockPin, MSBFIRST, displayEtage[huidigeEtage]);
+digitalWrite(latchPin, HIGH);
+delay(2000);
+huidigeEtage--;
+}
+
+while (huidigeEtage<mijnEtage){ //ga elke 2 seconden 1 etage omhoog
+
+digitalWrite(latchPin,LOW);
+shiftOut(dataPin, clockPin, MSBFIRST, displayEtage[huidigeEtage]);
+digitalWrite(latchPin, HIGH);
+delay(2000);
+huidigeEtage++;
+}
+  } 
+
+//----afstandssensor----
+digitalWrite(trigPin, LOW);
+delayMicroseconds(2);
+digitalWrite(trigPin, HIGH); //zendt een puls uit
+delayMicroseconds(10);
+digitalWrite(trigPin, LOW);
+
+tijd = pulseIn(echoPin, HIGH); //kijk hoelang het duurt voor de puls terugkomt
+afstand = tijd*0.034/2; //afstand berekenen doormiddel van geluidssnelheid
+Serial.print("afstand: "); 
+Serial.println(afstand); //laat de afstand zien
+//----------------------
+
+
+if (afstand <= liftTrigger) { //lift wordt gedetecteerd
+detectie = true;
+huidigeEtage = mijnEtage; //de huidige etage is nu gelijk aan mijn etage
+Serial.println ("lift gedetecteerd!");
+Serial.print ("doel etage: ");
+Serial.println (doelEtage);
+digitalWrite(latchPin,LOW);
+shiftOut(dataPin, clockPin, MSBFIRST, displayEtage[3]); //3 op 7 segment, mijn etage
+Serial.println ("geef etage weer op 3 segment display");
+digitalWrite(latchPin, HIGH);
+Serial.println ("stop lift"); //stopt de lift
+delay(1000); //tijd tot wanneer de lift stil moet staan
+digitalWrite(ledR, LOW);
+digitalWrite(ledG, HIGH);
+delay(4000);//lift staat stil, mensen kunnen in en uitstappen
+digitalWrite(ledG, LOW);
+
+while(huidigeEtage> doelEtage){ //lift vertrekt en gaat naar beneden
+digitalWrite(latchPin,LOW);
+shiftOut(dataPin, clockPin, MSBFIRST, displayEtage[huidigeEtage]); 
+digitalWrite(latchPin, HIGH);
+delay(2000);
+huidigeEtage--;
+digitalWrite(latchPin,LOW);
+shiftOut(dataPin, clockPin, MSBFIRST, displayEtage[huidigeEtage]);
+digitalWrite(latchPin, HIGH);
+}
+while(huidigeEtage< doelEtage){ //lift vertrekt en gaat naar boven
+digitalWrite(latchPin,LOW);
+shiftOut(dataPin, clockPin, MSBFIRST, displayEtage[huidigeEtage]);
+digitalWrite(latchPin, HIGH);
+delay(2000);
+huidigeEtage++;
+digitalWrite(latchPin,LOW);
+shiftOut(dataPin, clockPin, MSBFIRST, displayEtage[huidigeEtage]);
+digitalWrite(latchPin, HIGH);
+}
+delay(2000);
+
+}
+
+else { //lift wordt niet gedetecteerd
+detectie = false;
+
+  
+}
+delay(10);
+}
