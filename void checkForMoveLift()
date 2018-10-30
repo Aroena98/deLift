@@ -1,0 +1,25 @@
+    // check floors above current floor to see if anyone wants to go down
+    // afmaken bij studenten
+
+  for(int i = currentFloor; i < (sizeof(floorButtonUp)/sizeof(int)); i++) {  // sizeof(int) used bacause arduino is a bitch https://www.arduino.cc/en/Reference/Sizeof
+      if (floorButtonDown[i] || floorButtonElevator[i]) {
+        Serial.println("A floor above me wants to go down");
+        moveUp = true;
+        moveDown = false;
+        movingUp = true;
+        return;
+      }
+    }
+----------------------------------------------------------------------------------------------------------------------------------------------------------------
+// check floors above current floor to see if anyone wants to go down
+   // afmaken bij studenten
+
+   for(int i = currentFloor; i < (sizeof(floorButtonUp)/sizeof(int)); i++) {  // sizeof(int) used bacause arduino is a bitch https://www.arduino.cc/en/Reference/Sizeof
+      if (floorButtonDown[i] || floorButtonElevator[i]) {
+        Serial.println("A floor above me wants to go down");
+        moveUp = false;
+        moveDown = true;
+        movingUp = false;
+        return;
+      }
+    }
