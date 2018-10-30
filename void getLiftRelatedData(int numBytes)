@@ -1,0 +1,12 @@
+int displayEtage[] = {64, 121, 36, 48, 25, 18}; //geeft het etagenummer weer op 7 segment
+
+void getLiftRelatedData(int numBytes) {
+  // Get liftPosition and show it on LED display
+  //Fill by studenten
+
+  liftPosition = Wire.read();
+
+  digitalWrite(latchPin,LOW);
+  shiftOut(dataPin, clockPin, MSBFIRST, displayEtage[liftPosition]);
+  digitalWrite(latchPin, HIGH);
+}
