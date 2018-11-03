@@ -1,0 +1,67 @@
+// Master
+#include <Wire.h>
+
+//---data to receive from slave---
+
+int liftDetected = 0;
+int buttonDown = 0;
+int buttonUp = 0;
+int slaveData[3];
+
+//-----data to send to slave------
+
+int openDoor = 0;
+int liftPosition = 3;
+unsigned char masterData[2];
+
+//--------------------------------
+
+int aantalVerdiepingen = 4; //totaal aantal verdiepingen excl. master
+
+void setup()
+{
+ Serial.begin(9600);
+ Wire.begin();  // Start I2C as Master
+}
+
+void loop()
+{
+ requestDataFromSlaves(); // asking and receiving data from slaves
+ sendDataToSlaves(); // send data to slaves
+}
+ void requestDataFromSlaves() {
+   Serial.println("ontvangen van slaves");
+   for (int i = 0; i<= aantalVerdiepingen-1; i++) {
+    
+   Wire.requestFrom(i + 8,4);
+   
+   slaveData[0]=Wire.read();
+   slaveData[1]=Wire.read();
+   slaveData[2]=Wire.read();
+     
+     liftDetected = slaveData[0];
+     buttonDown = slaveData[1];
+     buttonUp = slaveData[2];
+ 
+ Serial.print("liftDetected = ");
+ Serial.println(liftDetected);
+ Serial.print("buttonDown = ");
+ Serial.println(buttonDown);
+ Serial.print("buttonUp = ");
+ Serial.println(buttonUp);
+ 
+ delay(500);
+   }
+}
+
+ void sendDataToSlaves() {
+  Serial.println("sturen naar slaves");
+ 
+  masterData[0] = openDoor;
+  masterData[1] = liftPosition;
+  
+  Wire.beginTransmission(8);
+  Wire.write(masterData,2);
+  Wire.endTransmission();
+  delay(500);
+ }
