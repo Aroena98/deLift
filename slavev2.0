@@ -1,0 +1,158 @@
+// Slave
+#include <Wire.h>
+
+//-----------pin lay-out----------
+
+int latchPin = 2; //7 segment shiftregister
+int dataPin =3; //7 segment shiftregister
+int clockPin = 4; //7 segment shiftregister
+int butOmlaag = 5; //button omlaag
+int butOmhoog = 6; //button omhoog
+int led = 10; //simuleert openende deur
+int trigPin = 12; //afstandssensor
+int echoPin = 13; //afstandssensor
+
+//---data to send to the master---
+
+int liftDetected = 0;
+int buttonDown = 1;
+int buttonUp = 1;
+unsigned char slaveData[3];
+
+//---data to receive from master--
+
+int openDoor = 0;
+int liftPosition = 0;
+int movingUp = 0;
+int movingDown = 0;
+int masterData[4];
+
+//-----------overige--------------
+
+//--------------------0----1---2---3---4---5
+int displayEtage[] = {64, 121, 36, 48, 25, 18}; //geeft het etagenummer weer op 7 segment
+int mijnEtage = 0; //hier vult ieder zijn eigen etage in
+int tijd;
+int afstand;
+int trigAfstand = 4; //als de afstand kleiner is dan dit getal, geeft de sensor een detectie aan
+
+//--------------------------------
+
+void setup()
+{
+//---starten van communicatie----
+  
+Serial.begin(9600);
+Wire.begin(mijnEtage + 8);  //het I2C adres
+Wire.onRequest(requestData); //wanneer de master vraagt om data
+Wire.onReceive(receiveData); //wanneer de master data stuurt
+Serial.print("setup = ");
+
+//-------pin eigenschappen------
+
+pinMode(latchPin, OUTPUT);
+pinMode(dataPin, OUTPUT);
+pinMode(clockPin, OUTPUT);
+pinMode(butOmlaag, INPUT_PULLUP);
+pinMode(butOmhoog, INPUT_PULLUP);
+pinMode(led, OUTPUT);
+pinMode(trigPin, OUTPUT);
+pinMode(echoPin, INPUT);
+
+//------------------------------
+
+digitalWrite(led, LOW);
+}
+
+void loop()
+{
+Serial.print("loop = ");
+buttonRead();
+sensorRead();
+displayHandler();
+openTheDoor();
+}
+
+void requestData()
+{
+  Serial.print("sturen = ");
+ slaveData[0] = liftDetected;
+ slaveData[1] = buttonDown;
+ slaveData[2] = buttonUp;
+ Wire.write(slaveData,3);
+}
+
+void receiveData(int numBytes)
+{
+  Serial.print("krijgen = ");
+ masterData[0]=Wire.read();
+ masterData[1]=Wire.read();
+ masterData[2]=Wire.read();
+ masterData[3]=Wire.read();
+     
+     openDoor = masterData[0];
+     liftPosition = masterData[1];
+     movingUp = masterData[2];
+     movingDown = masterData[3];
+     
+ 
+ Serial.print("openDoor = ");
+ Serial.println(openDoor);
+ Serial.print("liftPosition = ");
+ Serial.println(liftPosition); 
+}
+void buttonRead() 
+{
+  Serial.print("but lezen = ");
+if (buttonUp == 1 && buttonDown == 1) {
+buttonUp = digitalRead(butOmhoog); //lees de waarde van de omlaag button
+buttonDown = digitalRead(butOmlaag); //lees de waarde van de omhoog button
+}
+Serial.print(buttonUp);
+Serial.print(buttonDown);
+}
+void sensorRead() 
+{
+  Serial.print("sensor lezen = ");
+  if (liftDetected == 0){
+    
+digitalWrite(trigPin, LOW);
+delayMicroseconds(2);
+digitalWrite(trigPin, HIGH); //zendt een puls uit
+delayMicroseconds(10);
+digitalWrite(trigPin, LOW);
+
+tijd = pulseIn(echoPin, HIGH); //kijk hoelang het duurt voor de puls terugkomt
+afstand = tijd*0.034/2; //afstand berekenen doormiddel van geluidssnelheid
+Serial.print("afstand: "); 
+Serial.println(afstand); //laat de afstand zien
+
+if (afstand < trigAfstand) {
+  liftDetected = 1;
+  Serial.print("lift gedetecteerd!"); 
+} 
+}
+}
+
+void displayHandler() 
+{
+digitalWrite(latchPin,LOW);
+shiftOut(dataPin, clockPin, MSBFIRST, displayEtage[liftPosition]); //laat huidige etage zien op display
+digitalWrite(latchPin, HIGH);
+}
+
+void openTheDoor()
+{
+  if (openDoor = 1){
+    digitalWrite(led, HIGH);
+    resetButtons();
+    delay(3000); //deur blijft 3 seconden open
+    digitalWrite(led, LOW);
+  }
+}
+
+void resetButtons() 
+{
+  buttonDown = 1;
+  buttonUp = 1;
+}
