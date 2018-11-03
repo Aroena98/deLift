@@ -1,0 +1,59 @@
+// Slave
+#include <Wire.h>
+
+//---data to send to the master---
+
+int liftDetected = 1;
+int buttonDown = 2;
+int buttonUp = 3;
+unsigned char slaveData[3];
+
+//---data to receive from master--
+
+int openDoor = 0;
+int liftPosition = 0;
+int masterData[2];
+
+//--------------------------------
+
+int mijnEtage = 1; //hier vult ieder zijn eigen etage in
+
+void setup()
+{
+ Serial.begin(9600);
+ Wire.begin(mijnEtage + 8);  //het I2C adres
+ Wire.onRequest(requestData); //wanneer de master vraagt om data
+ Wire.onReceive(receiveData); //wanneer de master data stuurt
+ 
+}
+
+void loop()
+{
+ 
+
+  
+}
+
+void requestData()
+{
+ slaveData[0] = liftDetected;
+ slaveData[1] = buttonDown;
+ slaveData[2] = buttonUp;
+ Wire.write(slaveData,3);
+}
+
+void receiveData(int numBytes)
+{
+ masterData[0]=Wire.read();
+ masterData[1]=Wire.read();
+     
+     openDoor = masterData[0];
+     liftPosition = masterData[1];
+     
+ 
+ Serial.print("openDoor = ");
+ Serial.println(openDoor);
+ Serial.print("liftPosition = ");
+ Serial.println(liftPosition);
+  
+}
