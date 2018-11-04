@@ -1,0 +1,155 @@
+// Master
+#include <Wire.h>
+#include <Stepper.h>
+#include <Key.h>
+#include <Keypad.h>
+
+//-----------pin lay-out----------
+int latchPin = 2; //7 segment shiftregister
+int dataPin =3; //7 segment shiftregister
+int clockPin = 4; //7 segment shiftregister
+int butOmlaag = 5; //button omlaag
+int butOmhoog = 6; //button omhoog
+int led = 10; //simuleert openende deur
+int trigPin = 12; //afstandssensor
+int echoPin = 13; //afstandssensor
+//-----------stappenmotor---------
+#define steps 2038
+Stepper stepper(steps, 8, 10, 9, 11);
+//-------------keypad------------
+const byte Rows= 4; 
+const byte Cols= 3; 
+int keymap[Rows][Cols]=
+{
+{'1', '2', '3'},
+{'4', '5', '6'},
+{'7', '8', '9'},
+{'\0', '0', '\0'}
+};
+byte rPins[Rows]= {2,3,4,5}; 
+byte cPins[Cols]= {6,7,8}; 
+Keypad kpd= Keypad(makeKeymap(keymap), rPins, cPins, Rows, Cols);
+//---data to receive from slave---
+int liftDetected = 0;
+int buttonDown = 0;
+int buttonUp = 0;
+int slaveData[3];
+//-----data to send to slave------
+int openDoor = 0;
+int liftPosition = 1;
+int movingUp = 0;
+int movingDown = 0;
+unsigned char masterData[4];
+//-----------overige--------------
+int aantalVerdiepingen = 4; //totaal aantal verdiepingen excl. master
+int doelEtage = 2;
+//--------------------------------
+
+void setup()
+{  
+//---starten van communicatie----
+Serial.begin(9600);
+Wire.begin();  // start I2C als master
+//------------------------------
+}
+void loop()
+{  
+requestDataFromSlaves(); // vragen en ontvangen van slaves
+// delay(500);
+sendDataToSlaves(); // sturen naar slaves
+//keypadRequest(); // vraag naar welke etage er gegaan moet worden
+// bewegenVanLift();
+}
+void requestDataFromSlaves() 
+{
+Serial.println("ontvangen van slaves");
+   
+   for (int i = 0; i<= aantalVerdiepingen-1; i++) 
+   { 
+   Wire.requestFrom(i + 8,4);
+   slaveData[0]=Wire.read();
+   slaveData[1]=Wire.read();
+   slaveData[2]=Wire.read();
+   liftDetected = slaveData[0];
+   buttonDown = slaveData[1];
+   buttonUp = slaveData[2];
+     
+      if (liftDetected == 1) 
+      {
+      liftPosition = i;
+      Serial.println(i);
+      }
+          if (liftPosition == doelEtage)
+          {
+          openDoor = 1;
+          sendDataToSlaves();
+          } 
+  
+ Serial.print("liftDetected = ");
+ Serial.println(liftDetected);
+ Serial.print("buttonDown = ");
+ Serial.println(buttonDown);
+ Serial.print("buttonUp = ");
+ Serial.println(buttonUp);
+   }
+   delay(20);
+}
+void sendDataToSlaves() 
+{
+Serial.println("sturen naar slaves");
+ 
+  masterData[0] = openDoor;
+  masterData[1] = liftPosition;
+  masterData[2] = movingUp;
+  masterData[3] = movingDown;
+
+    if (openDoor != 1)
+    {
+        for (int i = 0; i<= aantalVerdiepingen-1; i++) 
+        {
+        Wire.beginTransmission(i +8);
+        Wire.write(masterData,4);
+        Wire.endTransmission();
+        }
+    }    
+          else 
+          {
+          Wire.beginTransmission(liftPosition +8);
+          Wire.write(masterData,4);
+          Wire.endTransmission();
+          }
+}
+void keypadRequest()
+{
+int keypressed = kpd.getKey();
+   while (keypressed == NO_KEY || keypressed>3) //zolang er geen key is ingedrukt of het nummer hoger is dan het aantal etages
+   { 
+// Serial.println("doeletage bereikt!");
+   delay(100);
+   Wire.beginTransmission(10);
+// Serial.println(liftPosition +8);
+   Wire.write(masterData,4);
+   Wire.endTransmission();
+   delay(100);
+   }
+     Serial.println(keypressed);
+     doelEtage = keypressed;
+}
+void bewegenVanLift()
+{
+stepper.setSpeed(6); // 6 rpm
+stepper.step(2038); // do 2038 steps -- corresponds to one revolution in one minute
+delay(100); // wait for one second
+
+    if (liftPosition == doelEtage)
+    {
+    Serial.println("liftposition is doeletage");
+    stepper.setSpeed(0); // stop stepper
+    stepper.step(2038); // do 2038 steps -- corresponds to one revolution in one minute
+    openDoor = 1;
+    Wire.beginTransmission(doelEtage +8);
+    Wire.write(masterData,4);
+    Wire.endTransmission();
+    delay(30);
+    }
+}
