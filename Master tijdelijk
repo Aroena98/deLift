@@ -1,0 +1,256 @@
+// Master
+#include <Wire.h>
+#include <AccelStepper.h>
+#include <Keypad.h>
+
+//-----------pin lay-out----------
+int latchPin = 2; //7 segment shiftregister
+int dataPin =3; //7 segment shiftregister
+int clockPin = 4; //7 segment shiftregister
+int butOmlaag = 5; //button omlaag
+int butOmhoog = 6; //button omhoog
+int led = 10; //simuleert openende deur
+int trigPin = 12; //afstandssensor
+int echoPin = 13; //afstandssensor
+//-----------stappenmotor---------
+int etageVerschil = 16000;
+#define HALFSTEP 8
+#define motorPin1  3     // IN1 on the ULN2003 driver 1
+#define motorPin2  4     // IN2 on the ULN2003 driver 1
+#define motorPin3  5     // IN3 on the ULN2003 driver 1
+#define motorPin4  6     // IN4 on the ULN2003 driver 1
+AccelStepper stepper1(HALFSTEP, motorPin1, motorPin3, motorPin2, motorPin4);
+//-------------keypad------------
+#define ROWS 4
+#define COLS 3
+ 
+const char keys [ ROWS ][ COLS ] = {
+  {'1','2','3'},
+  {'4','5','6'},
+  {'7','8','9'},
+  {'/0','0','/0'}
+
+};
+
+const byte rowPins [ROWS] = {22, 24, 26, 28};
+const byte colPins [COLS] = {30, 32, 34};
+Keypad keypad = Keypad (makeKeymap(keys),rowPins,colPins,ROWS,COLS);
+//---data to receive from slave---
+int liftDetected = 0;
+int buttonDown = 0;
+int buttonUp = 0;
+int slaveData[3];
+//-----data to send to slave------
+int openDoor = 0;
+int liftPosition = 0;
+int movingUp = 0;
+int movingDown = 0;
+unsigned char masterData[4];
+//-----------overige--------------
+int aantalVerdiepingen = 2; //totaal aantal verdiepingen excl. master
+int doelEtage;
+int tussenstop1 = -2;
+int tussenstop2 = -2;
+//--------------------------------
+void resetAll();
+void sendDataToSlaves();
+void setup()
+{  
+//---starten van communicatie----
+Serial.begin(9600);
+Wire.begin();  // start I2C als master
+//------------------------------
+int etageVerschil = 16000;
+stepper1.setMaxSpeed(1000.0);
+stepper1.setAcceleration(1000.0);
+stepper1.setSpeed(1000);
+stepper1.moveTo(etageVerschil);
+}
+void loop()
+{  
+requestDataFromSlaves(); // vragen en ontvangen van slaves
+//delay(500);
+sendDataToSlaves(); // sturen naar slaves
+//keypadRequest(); // vraag naar welke etage er gegaan moet worden
+//bewegenVanLift();
+}
+void requestDataFromSlaves() 
+{
+Serial.println("ontvangen van slaves");
+   
+   for (int i = 0; i<= aantalVerdiepingen-1; i++) 
+   { 
+   Wire.requestFrom(i + 8,4);
+   slaveData[0]=Wire.read();
+   slaveData[1]=Wire.read();
+   slaveData[2]=Wire.read();
+   liftDetected = slaveData[0];
+   buttonDown = slaveData[1];
+   buttonUp = slaveData[2];
+     
+      if (liftDetected == 1) 
+      {
+      liftPosition = i;
+      Serial.print("lift positie: ");
+      Serial.println(i);
+      }
+          if (liftPosition == doelEtage || liftPosition == tussenstop1 || liftPosition == tussenstop2)
+          {
+            openDoor = 1;
+            sendDataToSlaves();
+          } 
+
+            if (buttonDown == 0 && movingDown == 1 && i > doelEtage && i < liftPosition && i!= 0)// button omlaag ingedrukt en lift gaat omlaag en de vragende etage zit boven de doeletage onder de huidige etage
+            {
+              tussenstop1 = i;
+            
+                if (tussenstop1 > 0)
+                {
+                  tussenstop2 = i;
+                }
+            }
+              
+              if (buttonUp == 0 && movingUp == 1 && i < doelEtage && i > liftPosition && i!= aantalVerdiepingen)// button omhoog ingedrukt en lift gaat omhoog en de vragende etage zit onder de doeletage maar boven de huidige etage
+              {
+              tussenstop1 = i;
+              }
+                if (tussenstop1 > 0)
+                {
+                tussenstop2 = i;
+                }
+              
+ Serial.print("liftDetected = ");
+ Serial.println(liftDetected);
+ Serial.print("buttonDown = ");
+ Serial.println(buttonDown);
+ Serial.print("buttonUp = ");
+ Serial.println(buttonUp);
+   }
+   delay(20);
+}
+void sendDataToSlaves() 
+{
+Serial.println("sturen naar slaves");
+ 
+  masterData[0] = openDoor;
+  masterData[1] = liftPosition;
+  masterData[2] = movingUp;
+  masterData[3] = movingDown;
+
+    if (openDoor != 1)
+    {
+        for (int i = 0; i<= aantalVerdiepingen-1; i++) 
+        {
+        Wire.beginTransmission(i +8);
+        Wire.write(masterData,4);
+        Wire.endTransmission();
+        }
+    }    
+          else if (liftPosition == tussenstop1 || liftPosition == tussenstop2)
+          {
+            Wire.beginTransmission(liftPosition +8);
+            Wire.write(masterData,4);
+            Wire.endTransmission();
+            openDoor = 0;
+          }     else if (liftPosition == doelEtage)
+                {
+                  Wire.beginTransmission(liftPosition +8);
+                  Wire.write(masterData,4);
+                  Wire.endTransmission();
+                  sendDataToSlaves();
+                  resetAll();
+                  keypadRequest();
+                }
+}
+void keypadRequest()
+{
+ char key ;
+
+  while (!( key = keypad . getKey ())) { // wait for key
+  }
+
+  int input = key -'0';
+  Serial.print("input; ");
+  Serial.println(input);
+  doelEtage = input;
+  bewegenVanLift();
+}
+void bewegenVanLift()
+{
+    if(liftPosition > doelEtage)
+    {
+      movingUp = 0;
+      movingDown = 1;
+    } else if(liftPosition < doelEtage)
+      { 
+        movingUp = 1;
+        movingDown = 0;
+      }
+      requestDataFromSlaves();
+
+        if(movingUp == 1 && movingDown == 0)
+        {   
+          
+            if (tussenstop1 > 0)
+            {
+              while (stepper1.distanceToGo() != 0){
+              etageVerschil = etageVerschil*(tussenstop1-liftPosition);
+              stepper1.moveTo(-etageVerschil);
+              stepper1.run();
+             }
+             }
+                if (tussenstop2 > 0)
+                {
+                  while (stepper1.distanceToGo() != 0){
+                  etageVerschil = etageVerschil*(tussenstop2-liftPosition);
+                  stepper1.moveTo(-etageVerschil);
+                  stepper1.run();
+                }
+                }
+                    if (doelEtage != liftPosition)
+                    {
+                      while (stepper1.distanceToGo() != 0){
+                      etageVerschil = etageVerschil*(doelEtage-liftPosition);
+                      stepper1.moveTo(-etageVerschil);
+                      stepper1.run();
+                    }
+                    }
+        }
+
+         if(movingUp == 0 && movingDown == 1)
+        {   
+            if (tussenstop1 > 0)
+            {
+              while (stepper1.distanceToGo() != 0){
+              etageVerschil = etageVerschil*(liftPosition-tussenstop2);
+              stepper1.moveTo(etageVerschil);
+              stepper1.run();
+            }
+            }
+                if (tussenstop2 > 0)
+                {
+                  while (stepper1.distanceToGo() != 0){
+                  etageVerschil = etageVerschil*(liftPosition-tussenstop2);
+                  stepper1.moveTo(etageVerschil);
+                  stepper1.run();
+                 }
+                 }
+                    if (doelEtage != liftPosition)
+                    {
+                      while (stepper1.distanceToGo() != 0){
+                      etageVerschil = etageVerschil*(liftPosition-doelEtage);
+                      stepper1.moveTo(etageVerschil);
+                      stepper1.run();
+                      Serial.println("hoooii");
+                      delay(4000);
+                    }
+                    }
+        }
+}
+void resetAll() {
+  tussenstop1 = -2;
+  tussenstop2 = -2;
+  openDoor = 0;
+  movingUp = 0;
+  movingDown = 0;
+}
